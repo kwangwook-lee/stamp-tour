@@ -1,0 +1,525 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+<title>동아리 체험한마당 스탬프 투어</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Do+Hyeon&family=Noto+Sans+KR:wght@400;500;700&display=swap">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+<style>
+  /* 종이 스탬프지 + 빨간 인주 도장 */
+  :root{
+    --paper:#F4F6F9; --card:#FFFFFF; --ink:#1C2838; --muted:#5F6B7A; --line:#DDE2EA;
+    --seal:#C9372C; --seal-soft:#FBE9E7; --ok:#18804A; --ok-soft:#E3F4EA; --warn:#B25E00; --warn-soft:#FFF1DE;
+    --display:"Do Hyeon","Noto Sans KR",system-ui,sans-serif;
+    --body:"Noto Sans KR",system-ui,-apple-system,"Apple SD Gothic Neo","Malgun Gothic",sans-serif;
+  }
+  @media (prefers-color-scheme: dark){
+    :root{ --paper:#11161E; --card:#1A212C; --ink:#E9EDF3; --muted:#A3AEBD; --line:#2C3644;
+      --seal:#F0645A; --seal-soft:#3A1E1C; --ok:#4CC27E; --ok-soft:#14301F; --warn:#F2A54A; --warn-soft:#33240F; color-scheme:dark; }
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0}
+  body{background:var(--paper);color:var(--ink);font:15px/1.55 var(--body);-webkit-text-size-adjust:100%}
+  h1,h2,h3{font-family:var(--display);font-weight:400;margin:0;letter-spacing:.01em;text-wrap:balance}
+  button{font:inherit;cursor:pointer}
+  button:focus-visible,a:focus-visible,input:focus-visible,select:focus-visible{outline:3px solid var(--seal);outline-offset:2px}
+  .wrap{max-width:560px;margin:0 auto;padding:20px 16px 40px}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:18px}
+  .muted{color:var(--muted)}
+  .num{font-variant-numeric:tabular-nums}
+  .btn{border:1px solid var(--line);background:var(--card);color:var(--ink);border-radius:10px;padding:10px 14px}
+  .btn.primary{background:var(--ink);color:var(--paper);border-color:var(--ink)}
+  .msg{border-radius:12px;padding:14px 16px;font-weight:500}
+  .msg.ok{background:var(--ok-soft);color:var(--ok)}
+  .msg.err{background:var(--seal-soft);color:var(--seal)}
+  .msg.warn{background:var(--warn-soft);color:var(--warn)}
+  @media (prefers-reduced-motion: reduce){*{animation:none!important;transition:none!important}}
+
+  .boot{min-height:60vh;display:grid;place-items:center;color:var(--muted);text-align:center;padding:24px}
+</style>
+<style id="view-css"></style>
+</head>
+<body>
+<div id="app"><div class="boot">불러오는 중…</div></div>
+<script>
+/* 데이터 서버 (구글 Apps Script) 주소 */
+var API = "https://script.google.com/macros/s/AKfycbxqzAYsxkueaR4t7Cdb1ySBbIouBjs97-npz7hiVfPpM98-bHqNaYLrzzN83BTvrZbH/exec";
+
+/* google.script.run 과 같은 방식으로 서버 함수를 부릅니다. 구글 로그인 쿠키를 보내지 않아 어떤 계정 상태에서도 동작합니다. */
+function callApi(fn, args){
+  var url = API + '?api=' + encodeURIComponent(fn) + '&args=' + encodeURIComponent(JSON.stringify(args || [])) + '&_=' + Date.now();
+  return fetch(url, { credentials: 'omit', cache: 'no-store' }).then(function(r){ if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); });
+}
+window.google = { script: { get run(){
+  var ok = null, fail = null, P;
+  P = new Proxy({}, { get: function(_, name){
+    if (name === 'withSuccessHandler') return function(f){ ok = f; return P; };
+    if (name === 'withFailureHandler') return function(f){ fail = f; return P; };
+    return function(){ var a = Array.prototype.slice.call(arguments);
+      callApi(name, a).then(function(r){ ok && ok(r); }, function(e){ fail && fail(e); }); };
+  } });
+  return P;
+} } };
+
+var VIEWS = {};
+VIEWS.Student = { css: "\n  .top{display:flex;justify-content:space-between;align-items:flex-end;gap:12px;margin-bottom:14px}\n  .top h1{font-size:26px;line-height:1.15}\n  .eyebrow{font-size:12px;letter-spacing:.08em;color:var(--seal);font-weight:700}\n  .who{font-size:14px;color:var(--muted);text-align:right}\n  .who b{display:block;color:var(--ink);font-size:17px}\n  .stack{display:grid;gap:14px}\n  .count{display:flex;align-items:baseline;gap:8px}\n  .count .big{font-family:var(--display);font-size:64px;line-height:1;color:var(--seal)}\n  .count .of{font-family:var(--display);font-size:28px;color:var(--muted)}\n  .bar{height:10px;border-radius:99px;background:var(--line);overflow:hidden;margin-top:10px}\n  .bar i{display:block;height:100%;background:var(--seal);border-radius:99px;transition:width .6s ease}\n  .grid{display:grid;grid-template-columns:repeat(5,1fr);gap:10px;margin-top:4px}\n  .slot{display:flex;flex-direction:column;align-items:center;gap:4px;min-width:0}\n  .seal{width:100%;max-width:58px;aspect-ratio:1;border-radius:50%;border:2px dashed var(--line);display:grid;place-items:center;\n        font-family:var(--display);font-size:20px;color:var(--muted)}\n  .slot.on .seal{border:3px double var(--seal);color:var(--seal);background:var(--seal-soft);transform:rotate(-8deg)}\n  .slot.new .seal{animation:thump .5s ease-out}\n  .slot small{font-size:11px;color:var(--muted);text-align:center;line-height:1.25;word-break:keep-all;overflow-wrap:anywhere}\n  @keyframes thump{0%{transform:scale(1.8) rotate(-20deg);opacity:0}70%{transform:scale(.92) rotate(-6deg);opacity:1}100%{transform:scale(1) rotate(-8deg)}}\n  .done{background:#15703F;color:#fff;border-radius:16px;padding:22px 18px;text-align:center;position:relative;overflow:hidden}\n  .done h2{font-size:34px;line-height:1.2}\n  .done p{margin:6px 0 0;font-size:16px}\n  .done .clock{margin-top:14px;font-family:var(--display);font-size:44px;letter-spacing:.04em}\n  .done .pulse{position:absolute;inset:0;border-radius:16px;box-shadow:inset 0 0 0 0 rgba(255,255,255,.55);animation:pulse 1.6s infinite}\n  @keyframes pulse{0%{box-shadow:inset 0 0 0 0 rgba(255,255,255,.5)}100%{box-shadow:inset 0 0 0 18px rgba(255,255,255,0)}}\n  .intro{text-align:center;padding:28px 18px}\n  .intro .ill{width:120px;height:120px;margin:0 auto 14px;border:3px solid var(--ink);border-radius:18px;display:grid;place-items:center;font-family:var(--display);font-size:22px}\n  .tips{font-size:13px;color:var(--muted);margin:0;padding-left:18px}\n  .row{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap}\n  .loading{text-align:center;padding:40px 0;color:var(--muted)}\n", html: "<div class=\"wrap\">\n  <div class=\"top\">\n    <div>\n      <div class=\"eyebrow\">STAMP TOUR<\/div>\n      <h1 id=\"title\">동아리 체험한마당<\/h1>\n    <\/div>\n    <div class=\"who\" id=\"who\"><\/div>\n  <\/div>\n  <div class=\"stack\">\n    <div id=\"banner\" hidden><\/div>\n    <div id=\"main\"><div class=\"loading\">불러오는 중…<\/div><\/div>\n  <\/div>\n<\/div>", run: function(){
+
+var DATA = window.__DATA;
+var LS_KEY = 'club_stamp_tour_v1';
+var lastStamps = [];
+var clockTimer = null;
+
+document.getElementById('title').textContent = DATA.event;
+
+function load(){ try { return JSON.parse(localStorage.getItem(LS_KEY) || 'null'); } catch(e){ return null; } }
+function save(o){ try { localStorage.setItem(LS_KEY, JSON.stringify(o)); return true; } catch(e){ return false; } }
+function newDev(){
+  var a = new Uint8Array(16);
+  (window.crypto || window.msCrypto).getRandomValues(a);
+  return Array.prototype.map.call(a, function(b){ return ('0'+b.toString(16)).slice(-2); }).join('');
+}
+function el(tag, cls, text){ var e=document.createElement(tag); if(cls) e.className=cls; if(text!=null) e.textContent=text; return e; }
+
+function banner(kind, text){
+  var b = document.getElementById('banner');
+  b.hidden = false; b.className = 'msg ' + kind; b.textContent = text;
+}
+function call(fn, args, ok){
+  var r = google.script.run
+    .withSuccessHandler(ok)
+    .withFailureHandler(function(){ banner('err','연결이 원활하지 않아요. 와이파이·데이터를 확인하고 다시 시도해 주세요.'); retryButton(); });
+  r[fn].apply(r, args);
+}
+function retryButton(){
+  var m = document.getElementById('main');
+  if (m.querySelector('.loading')) {
+    m.innerHTML=''; var b=el('button','btn primary','다시 시도'); b.onclick=function(){ location.reload(); }; m.appendChild(b);
+  }
+}
+
+function intro(extra){
+  var m = document.getElementById('main'); m.innerHTML='';
+  var c = el('div','card intro');
+  c.appendChild(el('div','ill','QR'));
+  c.appendChild(el('h2',null,'개인 QR 카드를 먼저 찍어 주세요'));
+  var p = el('p','muted','담임 선생님께 받은 내 QR 카드를 휴대폰 기본 카메라로 한 번만 찍으면 이 휴대폰에 등록돼요.');
+  c.appendChild(p);
+  if (extra) c.appendChild(el('p','muted',extra));
+  m.appendChild(c);
+}
+
+function render(st, newBooth){
+  document.getElementById('who').innerHTML='';
+  var w = document.getElementById('who');
+  w.appendChild(el('b',null,st.name)); w.appendChild(document.createTextNode(st.id));
+
+  var m = document.getElementById('main'); m.innerHTML='';
+  var stack = el('div','stack');
+
+  if (st.done){
+    var d = el('div','done');
+    d.appendChild(el('div','pulse'));
+    d.appendChild(el('h2',null,'완주했어요!'));
+    d.appendChild(el('p',null,'간식을 받을 수 있어요. 간식 부스에 이 화면을 보여 주세요.'));
+    var ck = el('div','clock num',''); ck.id='clock'; d.appendChild(ck);
+    stack.appendChild(d);
+    tick(); if(!clockTimer) clockTimer=setInterval(tick,1000);
+  }
+
+  var c = el('div','card');
+  var row = el('div','row');
+  var cnt = el('div','count');
+  cnt.appendChild(el('span','big num',String(st.count)));
+  cnt.appendChild(el('span','of num','/ '+st.goal));
+  row.appendChild(cnt);
+  var left = Math.max(0, st.goal - st.count);
+  row.appendChild(el('div','muted', left ? ('완주까지 '+left+'개 남았어요') : '완주 기준 달성'));
+  c.appendChild(row);
+  var bar = el('div','bar'); var fill = el('i'); fill.style.width = Math.min(100, st.count/st.goal*100)+'%'; bar.appendChild(fill); c.appendChild(bar);
+  stack.appendChild(c);
+
+  var g = el('div','card');
+  g.appendChild(el('h3',null,'부스 도장판'));
+  var grid = el('div','grid');
+  st.booths.forEach(function(b){
+    var on = st.stamps.indexOf(b.no) >= 0;
+    var s = el('div','slot'+(on?' on':'')+(b.no===newBooth?' new':''));
+    s.appendChild(el('div','seal num', on ? '✓' : b.no));
+    s.appendChild(el('small',null,b.name));
+    grid.appendChild(s);
+  });
+  g.appendChild(grid);
+  stack.appendChild(g);
+
+  var t = el('div','card');
+  var ul = el('ul','tips');
+  ['부스 화면의 QR을 휴대폰 기본 카메라로 찍으면 도장이 찍혀요.',
+   'QR은 '+DATA.period+'초마다 바뀌어요. 사진으로 찍어 둔 QR은 쓸 수 없어요.',
+   '카카오톡·네이버 앱의 QR 스캐너 말고 기본 카메라를 써 주세요.'].forEach(function(x){ ul.appendChild(el('li',null,x)); });
+  t.appendChild(ul);
+  var rb = el('button','btn','새로고침'); rb.style.marginTop='10px'; rb.onclick=function(){ location.reload(); };
+  t.appendChild(rb);
+  stack.appendChild(t);
+
+  m.appendChild(stack);
+}
+
+function tick(){
+  var c = document.getElementById('clock'); if(!c) return;
+  var d = new Date(); var p=function(n){return ('0'+n).slice(-2);};
+  c.textContent = p(d.getHours())+':'+p(d.getMinutes())+':'+p(d.getSeconds());
+}
+
+function start(){
+  var me = load();
+  var storageOk = save(me || {});
+  if (!storageOk){
+    banner('err','이 브라우저에서는 등록 정보를 저장할 수 없어요. 크롬이나 사파리로 열고, 시크릿(개인정보 보호) 모드를 꺼 주세요.');
+    intro(); return;
+  }
+  me = me || {};
+  if (!me.dev){ me.dev = newDev(); save(me); }
+
+  // 1) 개인 QR 카드를 찍은 경우
+  if (DATA.code){
+    if (me.code && me.code !== DATA.code){
+      banner('err','이 휴대폰에는 이미 다른 학생 카드가 등록되어 있어요. 한 휴대폰에는 한 명만 등록할 수 있어요.');
+      showStatus(me); return;
+    }
+    call('registerStudent',[DATA.code, me.dev], function(r){
+      if(!r.ok){ banner('err', r.error); intro(); return; }
+      me.code = DATA.code; save(me);
+      banner('ok', r.name + ' 학생, 등록됐어요! 이제 부스 QR을 찍어 도장을 모으세요.');
+      render(r);
+    });
+    return;
+  }
+  // 2) 부스 QR을 찍은 경우
+  if (DATA.b && DATA.t){
+    if (!me.code){ banner('warn','아직 등록되지 않은 휴대폰이에요.'); intro('등록한 뒤 부스 QR을 다시 찍어 주세요.'); return; }
+    call('stamp',[me.code, me.dev, DATA.b, DATA.t], function(r){
+      if(!r.ok && !r.booths){ banner('err', r.error); intro(); return; }
+      if(!r.ok) banner(r.code==='too_fast'?'warn':'err', r.error);
+      else if(r.result==='already') banner('warn', r.boothName + ' 도장은 이미 찍었어요.');
+      else if(r.justDone) banner('ok', r.boothName + ' 도장 완료! 축하해요, 완주했어요!');
+      else banner('ok', r.boothName + ' 도장 완료!');
+      render(r, r.ok && r.result==='stamped' ? String(DATA.b) : null);
+    });
+    return;
+  }
+  // 3) 그냥 연 경우
+  if (!me.code){ intro(); return; }
+  showStatus(me);
+}
+
+function showStatus(me){
+  call('status',[me.code, me.dev], function(r){
+    if(!r.ok){ banner('err', r.error); intro(); return; }
+    render(r);
+  });
+}
+
+start();
+
+} };
+VIEWS.Booth = { css: "\n  html,body{height:100%}\n  body{background:var(--card)}\n  .stage{min-height:100%;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;padding:16px;text-align:center}\n  .no{font-family:var(--display);color:var(--seal);font-size:22px;letter-spacing:.05em}\n  .name{font-size:clamp(30px,6vw,56px);line-height:1.1}\n  .qrbox{background:#fff;padding:14px;border-radius:16px;border:3px solid var(--ink)}\n  #qr img,#qr canvas{display:block;width:min(64vh,82vw)!important;height:auto!important;max-width:100%}\n  .timer{width:min(64vh,82vw);max-width:100%;height:8px;background:var(--line);border-radius:99px;overflow:hidden}\n  .timer i{display:block;height:100%;background:var(--seal);width:100%}\n  .guide{font-size:clamp(16px,2.6vw,22px);font-weight:500}\n  .meta{color:var(--muted);font-size:14px}\n  .err{max-width:520px}\n", html: "<div class=\"stage\">\n  <div class=\"no\" id=\"no\">부스<\/div>\n  <h1 class=\"name\" id=\"name\">불러오는 중…<\/h1>\n  <div class=\"qrbox\"><div id=\"qr\"><\/div><\/div>\n  <div class=\"timer\"><i id=\"bar\"><\/i><\/div>\n  <div class=\"guide\">휴대폰 <b>기본 카메라<\/b>로 QR을 찍으면 도장이 찍혀요<\/div>\n  <div class=\"meta num\" id=\"meta\"><\/div>\n  <div class=\"msg err\" id=\"err\" hidden><\/div>\n<\/div>", run: function(){
+
+var DATA = window.__DATA;
+var qr = null, timer = null, anim = null, fails = 0;
+
+function show(r){
+  document.getElementById('err').hidden = true;
+  document.getElementById('no').textContent = r.no + '번 부스';
+  document.getElementById('name').textContent = r.name;
+  document.getElementById('meta').textContent = '오늘 방문 ' + r.visits + '명 · QR은 ' + r.period + '초마다 바뀝니다';
+  if (!qr) qr = new QRCode(document.getElementById('qr'), { text: r.url, width: 600, height: 600, correctLevel: QRCode.CorrectLevel.M });
+  else { qr.clear(); qr.makeCode(r.url); }
+  countdown(r.secondsLeft, r.period);
+  clearTimeout(timer);
+  timer = setTimeout(refresh, Math.max(1, r.secondsLeft) * 1000 + 400);
+}
+function countdown(left, period){
+  var bar = document.getElementById('bar');
+  var end = Date.now() + left * 1000;
+  cancelAnimationFrame(anim);
+  (function f(){
+    var l = Math.max(0, end - Date.now());
+    bar.style.width = (l / (period * 1000) * 100) + '%';
+    if (l > 0) anim = requestAnimationFrame(f);
+  })();
+}
+function fail(msg){
+  var e = document.getElementById('err'); e.hidden = false; e.textContent = msg;
+  clearTimeout(timer); timer = setTimeout(refresh, 5000);
+}
+function refresh(){
+  google.script.run
+    .withSuccessHandler(function(r){
+      if (!r.ok) { document.getElementById('name').textContent = '링크 확인 필요'; var e=document.getElementById('err'); e.hidden=false; e.textContent=r.error; return; }
+      fails = 0; show(r);
+    })
+    .withFailureHandler(function(){ fails++; fail('인터넷 연결을 확인하고 있어요… (' + fails + ')'); })
+    .boothQr(DATA.booth, DATA.key);
+}
+try { if (navigator.wakeLock) navigator.wakeLock.request('screen').catch(function(){}); } catch(e){}
+refresh();
+
+} };
+VIEWS.Admin = { css: "\n  :root{ --bL:44%; --bS:62%; --tintL:95%; --tintS:70%; }\n  @media (prefers-color-scheme: dark){ :root{ --bL:64%; --bS:60%; --tintL:17%; --tintS:28%; } }\n  .wrap{max-width:1100px}\n  .head{display:flex;justify-content:space-between;align-items:flex-end;gap:12px;flex-wrap:wrap;margin-bottom:16px}\n  .head h1{font-size:28px}\n  .stack{display:grid;gap:16px}\n  h2{font-size:20px}\n  .sec-head{display:flex;justify-content:space-between;align-items:baseline;gap:10px;flex-wrap:wrap;margin-bottom:12px}\n  .muted-s{font-size:13px;color:var(--muted)}\n  /* 부스: 동아리마다 고유 색 (--h: 색상각) */\n  .booths{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}\n  @media (max-width:520px){.booths{grid-template-columns:repeat(2,minmax(0,1fr))}}\n  .bc{--c:hsl(var(--h) var(--bS) var(--bL));border:1px solid hsl(var(--h) 40% var(--bL) / .35);border-radius:10px;padding:8px 10px;display:grid;gap:5px;min-width:0;background:hsl(var(--h) var(--tintS) var(--tintL))}\n  .bc .nm{display:flex;align-items:center;gap:7px;font-weight:700;font-size:14px;min-width:0}\n  .bc .nm span{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}\n  .bc .no{flex:none;min-width:22px;height:22px;padding:0 4px;border-radius:6px;background:var(--c);color:#fff;font-size:12px;display:grid;place-items:center;font-variant-numeric:tabular-nums}\n  .bc .row{display:flex;align-items:center;gap:8px}\n  .bc .cnt{font-variant-numeric:tabular-nums;font-size:13px;white-space:nowrap}\n  .bc .cnt b{font-size:16px;color:var(--c)}\n  .bc .mini{flex:1;height:6px;border-radius:3px;background:hsl(var(--h) 25% var(--bL) / .2);overflow:hidden;min-width:20px}\n  .bc .mini i{display:block;height:100%;background:var(--c)}\n  .bc .acts{display:flex;gap:4px;flex:none}\n  .bc .acts a,.bc .acts button{text-align:center;font-size:12px;padding:3px 7px;border:1px solid var(--line);border-radius:7px;background:var(--card);color:var(--ink);text-decoration:none;white-space:nowrap}\n  /* 참여율 */\n  .tiles{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;margin-bottom:14px}\n  @media (max-width:700px){.tiles{grid-template-columns:repeat(2,minmax(0,1fr))}}\n  .tile{border:1px solid var(--line);border-radius:10px;padding:10px 12px}\n  .tile .k{font-size:12px;color:var(--muted)}\n  .tile .v{font-family:var(--display);font-size:30px;line-height:1.1}\n  .tile .v small{font-size:15px;color:var(--muted)}\n  .tile.done .v{color:var(--ok)}\n  .legend{display:flex;gap:14px;flex-wrap:wrap;font-size:13px;color:var(--muted)}\n  .legend i{display:inline-block;width:10px;height:10px;border-radius:3px;margin-right:5px;vertical-align:-1px}\n  .c-done{background:var(--ok)} .c-go{background:var(--warn)}\n  .charts{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px}\n  @media (max-width:760px){.charts{grid-template-columns:minmax(0,1fr)}}\n  .chart{border:1px solid var(--line);border-radius:10px;padding:10px 10px 4px;min-width:0}\n  .chart h3{font-size:17px;display:flex;justify-content:space-between;align-items:baseline;gap:6px;flex-wrap:wrap}\n  .chart h3 small{font-family:var(--body);font-size:12px;color:var(--muted)}\n  .chart svg{display:block;width:100%;height:auto}\n  .chart .grid{stroke:var(--line);stroke-width:1}\n  .chart .axis{fill:var(--muted);font-size:10px;font-family:var(--body)}\n  .chart .val{fill:var(--ink);font-size:10px;font-weight:700;font-family:var(--body)}\n  .chart .b-done{fill:var(--ok)} .chart .b-go{fill:var(--warn)}\n  .note{font-size:12px;color:var(--muted);margin-top:8px}\n  /* 학생 */\n  .tools{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px}\n  input,select{font:inherit;padding:8px 10px;border:1px solid var(--line);border-radius:10px;background:var(--card);color:var(--ink);min-width:0}\n  #q{flex:1;min-width:140px}\n  .scroll{overflow-x:auto;max-height:560px;overflow-y:auto}\n  table{width:100%;border-collapse:collapse;font-size:14px}\n  thead th{position:sticky;top:0;background:var(--card)}\n  th,td{padding:7px 8px;border-bottom:1px solid var(--line);text-align:left;white-space:nowrap}\n  th{font-size:12px;color:var(--muted);font-weight:500}\n  td.n{text-align:right;font-variant-numeric:tabular-nums}\n  .pill{display:inline-block;font-size:12px;padding:2px 8px;border-radius:99px}\n  .pill.ok{background:var(--ok-soft);color:var(--ok)}\n  .pill.go{background:var(--warn-soft);color:var(--warn)}\n  .pill.no{background:var(--line);color:var(--muted)}\n  .pill.t{background:var(--seal-soft);color:var(--seal);margin-left:6px}\n  .small{font-size:12px;padding:5px 9px}\n  .confirm{color:var(--seal);border-color:var(--seal)}\n  .sum{font-size:13px;color:var(--muted);margin-bottom:8px}\n  a{color:var(--ink)}\n", html: "<div class=\"wrap\">\n  <div class=\"head\">\n    <div>\n      <div class=\"muted\" style=\"font-size:12px;letter-spacing:.08em\">관리자 현황판<\/div>\n      <h1 id=\"title\">스탬프 투어<\/h1>\n    <\/div>\n    <div class=\"muted num\" id=\"updated\">불러오는 중…<\/div>\n  <\/div>\n  <div id=\"err\" class=\"msg err\" hidden><\/div>\n  <div class=\"stack\">\n\n    <div class=\"card\">\n      <div class=\"sec-head\">\n        <h2>부스별 방문<\/h2>\n        <span class=\"muted-s\"><span id=\"b-total\">0<\/span>회 방문 · <a id=\"cards\" target=\"_blank\" href=\"#\">학생 QR 카드 인쇄 화면<\/a><\/span>\n      <\/div>\n      <div class=\"booths\" id=\"booths\"><\/div>\n    <\/div>\n\n    <div class=\"card\">\n      <div class=\"sec-head\">\n        <h2>전체 참여율<\/h2>\n        <div class=\"legend\"><span><i class=\"c-done\"><\/i>완주<\/span><span><i class=\"c-go\"><\/i>진행 중 (막대 전체 높이 = 참여율)<\/span><\/div>\n      <\/div>\n      <div class=\"tiles\">\n        <div class=\"tile\"><div class=\"k\">참여 (휴대폰 등록)<\/div><div class=\"v num\" id=\"t-reg\">–<\/div><\/div>\n        <div class=\"tile done\"><div class=\"k\">완주 (간식 대상)<\/div><div class=\"v num\" id=\"t-done\">–<\/div><\/div>\n        <div class=\"tile\"><div class=\"k\">참여율 / 완주율<\/div><div class=\"v num\" id=\"t-rate\">–<\/div><\/div>\n        <div class=\"tile\"><div class=\"k\">참여 학생 평균 도장<\/div><div class=\"v num\" id=\"t-avg\">–<\/div><\/div>\n      <\/div>\n      <div class=\"charts\" id=\"charts\"><\/div>\n      <div class=\"note\" id=\"note\"><\/div>\n    <\/div>\n\n    <div class=\"card\">\n      <div class=\"sec-head\"><h2>학생 현황<\/h2><\/div>\n      <div class=\"tools\">\n        <select id=\"g\" aria-label=\"학년\"><\/select>\n        <select id=\"c\" aria-label=\"반\"><\/select>\n        <select id=\"f\" aria-label=\"상태\">\n          <option value=\"all\">전체 상태<\/option><option value=\"done\">완주<\/option><option value=\"go\">진행 중<\/option><option value=\"none\">미참여<\/option>\n        <\/select>\n        <input id=\"q\" placeholder=\"학번 또는 이름 검색\" aria-label=\"학생 검색\">\n      <\/div>\n      <div class=\"sum\" id=\"sum\"><\/div>\n      <div class=\"scroll\"><table><thead><tr><th>학번<\/th><th>이름<\/th><th style=\"text-align:right\">도장<\/th><th>상태<\/th><th>마지막 도장<\/th><th>휴대폰<\/th><\/tr><\/thead><tbody id=\"students\"><\/tbody><\/table><\/div>\n    <\/div>\n  <\/div>\n<\/div>", run: function(){
+
+var DATA = window.__DATA;
+var D = null, pending = null;
+var SVGNS = 'http://www.w3.org/2000/svg';
+function el(t,c,x){var e=document.createElement(t);if(c)e.className=c;if(x!=null)e.textContent=x;return e;}
+function sv(t,a){var e=document.createElementNS(SVGNS,t);for(var k in a)e.setAttribute(k,a[k]);return e;}
+function hm(ms){ if(!ms) return '–'; var d=new Date(ms),p=function(n){return('0'+n).slice(-2)}; return p(d.getHours())+':'+p(d.getMinutes()); }
+function grade(id){ return id.length >= 5 ? id.charAt(0) : '기타'; }
+function klass(id){ return id.length >= 5 ? id.slice(0, id.length - 2) : '기타'; }
+function klassLabel(k){ return k.length === 3 ? k.charAt(0) + '학년 ' + Number(k.slice(1)) + '반' : k; }
+function pct(a,b){ return b ? Math.round(a / b * 100) : 0; }
+function stat(s){ return s.done ? 'done' : s.registered ? 'go' : 'none'; }
+/* 테스트 학생: 학번이 999로 시작하거나 이름이 test로 시작 → 통계에서 제외 */
+function isTest(s){ return /^999/.test(s.id) || /^test/i.test(s.name); }
+
+function load(){
+  google.script.run.withSuccessHandler(function(r){
+    if(!r.ok){ var e=document.getElementById('err'); e.hidden=false; e.textContent=r.error; return; }
+    var first = !D; D = r; if (first) buildFilters(); draw();
+  }).withFailureHandler(function(){ document.getElementById('updated').textContent='연결 오류 – 30초 뒤 다시 시도'; }).adminData(DATA.key);
+}
+
+function draw(){
+  document.getElementById('title').textContent = D.event + ' 스탬프 투어';
+  document.getElementById('updated').textContent = '갱신 ' + hm(D.now) + ' · 30초마다 자동 갱신';
+  document.getElementById('cards').href = D.cardsUrl;
+  drawBooths(); drawRates(); drawStudents();
+}
+
+/* ① 부스별 방문 */
+function drawBooths(){
+  var max = Math.max.apply(null, D.booths.map(function(b){return b.visits;}).concat([1]));
+  var total = D.booths.reduce(function(a,b){ return a + b.visits; }, 0);
+  document.getElementById('b-total').textContent = total.toLocaleString();
+  var bx = document.getElementById('booths'); bx.innerHTML='';
+  D.booths.forEach(function(b, i){
+    var c = el('div','bc');
+    c.style.setProperty('--h', Math.round((i * 137.508) % 360));   // 황금각으로 이웃 부스끼리 색이 겹치지 않게
+    var nm = el('div','nm'); nm.appendChild(el('b','no', b.no)); nm.appendChild(el('span', null, b.name)); nm.title = b.name; c.appendChild(nm);
+    var row = el('div','row');
+    var cnt = el('span','cnt'); cnt.appendChild(document.createTextNode('방문 ')); cnt.appendChild(el('b', null, b.visits)); cnt.appendChild(document.createTextNode('명'));
+    row.appendChild(cnt);
+    var mini = el('div','mini'); var fi = el('i'); fi.style.width = (b.visits / max * 100) + '%'; mini.appendChild(fi); row.appendChild(mini);
+    var acts = el('div','acts');
+    var a = el('a', null, '열기'); a.href = b.url; a.target = '_blank'; acts.appendChild(a);
+    var cp = el('button', null, '복사');
+    cp.onclick = function(){ (navigator.clipboard ? navigator.clipboard.writeText(b.url) : Promise.reject()).then(function(){ cp.textContent='복사됨'; setTimeout(function(){ cp.textContent='복사'; }, 1500); }, function(){ prompt('링크', b.url); }); };
+    acts.appendChild(cp); row.appendChild(acts);
+    c.appendChild(row);
+    bx.appendChild(c);
+  });
+}
+
+/* ② 참여율: 테스트 학생 제외, 학년별 그래프 (x = 반, y = 참여율) */
+function drawRates(){
+  var real = D.students.filter(function(s){ return !isTest(s); });
+  var tests = D.students.length - real.length;
+  var n = real.length, reg = 0, done = 0, stamps = 0;
+  real.forEach(function(s){ if (s.registered) reg++; if (s.done) done++; stamps += s.count; });
+  document.getElementById('t-reg').innerHTML = reg + ' <small>/ ' + n + '명</small>';
+  document.getElementById('t-done').innerHTML = done + ' <small>명</small>';
+  document.getElementById('t-rate').innerHTML = pct(reg, n) + '% <small>/ ' + pct(done, n) + '%</small>';
+  document.getElementById('t-avg').textContent = reg ? (stamps / reg).toFixed(1) : '0';
+  document.getElementById('note').textContent = tests ? '테스트 학생 ' + tests + '명은 참여율 계산에서 제외했습니다.' : '';
+
+  var grades = {};
+  real.forEach(function(s){
+    var g = grade(s.id), k = klass(s.id);
+    grades[g] = grades[g] || {}; grades[g][k] = grades[g][k] || {d:0,g:0,n:0};
+    var x = grades[g][k]; x.n++; if (s.done) x.d++; else if (s.registered) x.g++;
+  });
+  var box = document.getElementById('charts'); box.innerHTML = '';
+  Object.keys(grades).sort().forEach(function(g){
+    var ks = Object.keys(grades[g]).sort(), tn = 0, tr = 0, td = 0;
+    ks.forEach(function(k){ var x = grades[g][k]; tn += x.n; tr += x.d + x.g; td += x.d; });
+    var card = el('div','chart');
+    var h = el('h3', null, g === '기타' ? '기타' : g + '학년');
+    h.appendChild(el('small', null, '참여 ' + pct(tr, tn) + '% · 완주 ' + pct(td, tn) + '%'));
+    card.appendChild(h);
+    card.appendChild(chart(ks, grades[g]));
+    box.appendChild(card);
+  });
+}
+
+function chart(ks, data){
+  var W = 250, H = 175, L = 30, R = 4, T = 16, B = 22, pw = W - L - R, ph = H - T - B;
+  var s = sv('svg', {viewBox: '0 0 ' + W + ' ' + H, role: 'img'});
+  [0, 25, 50, 75, 100].forEach(function(v){
+    var y = T + ph - v / 100 * ph;
+    s.appendChild(sv('line', {x1: L, x2: W - R, y1: y, y2: y, 'class': 'grid', 'stroke-dasharray': v % 50 ? '2 3' : ''}));
+    var t = sv('text', {x: L - 5, y: y + 3.5, 'text-anchor': 'end', 'class': 'axis'}); t.textContent = v + '%'; s.appendChild(t);
+  });
+  var band = pw / ks.length, bw = Math.min(26, band * 0.62);
+  ks.forEach(function(k, i){
+    var x = data[k], cx = L + band * i + band / 2;
+    var hd = x.d / x.n * ph, hg = x.g / x.n * ph;
+    var yd = T + ph - hd, yg = yd - hg;
+    if (hg > 0) s.appendChild(sv('rect', {x: cx - bw/2, y: yg, width: bw, height: hg, 'class': 'b-go'}));
+    if (hd > 0) s.appendChild(sv('rect', {x: cx - bw/2, y: yd, width: bw, height: hd, 'class': 'b-done'}));
+    var p = Math.round((x.d + x.g) / x.n * 100);
+    var vt = sv('text', {x: cx, y: Math.max(T - 3, yg - 4) , 'text-anchor': 'middle', 'class': 'val'}); vt.textContent = p + '%'; s.appendChild(vt);
+    var lt = sv('text', {x: cx, y: H - 7, 'text-anchor': 'middle', 'class': 'axis'}); lt.textContent = (k.length === 3 ? Number(k.slice(1)) : k) + '반'; s.appendChild(lt);
+    var tt = sv('title', {}); tt.textContent = klassLabel(k) + ' · ' + x.n + '명 · 참여 ' + (x.d + x.g) + '명 · 완주 ' + x.d + '명'; s.appendChild(tt);
+  });
+  return s;
+}
+
+/* ③ 학생 현황 */
+function buildFilters(){
+  var gs = {}, gSel = document.getElementById('g');
+  D.students.forEach(function(s){ gs[grade(s.id)] = 1; });
+  gSel.innerHTML = '<option value="all">전체 학년</option>' + Object.keys(gs).sort().map(function(g){ return '<option value="'+g+'">'+(g==='기타'?'기타':g+'학년')+'</option>'; }).join('');
+  gSel.onchange = function(){ fillClasses(); drawStudents(); };
+  fillClasses();
+}
+function fillClasses(){
+  var g = document.getElementById('g').value, cSel = document.getElementById('c'), ks = {};
+  D.students.forEach(function(s){ if (g === 'all' || grade(s.id) === g) ks[klass(s.id)] = 1; });
+  cSel.innerHTML = '<option value="all">전체 반</option>' + Object.keys(ks).sort().map(function(k){ return '<option value="'+k+'">'+klassLabel(k)+'</option>'; }).join('');
+}
+function drawStudents(){
+  if(!D) return;
+  var g = document.getElementById('g').value, c = document.getElementById('c').value;
+  var q = document.getElementById('q').value.trim(), f = document.getElementById('f').value;
+  var list = D.students.filter(function(s){
+    if (g !== 'all' && grade(s.id) !== g) return false;
+    if (c !== 'all' && klass(s.id) !== c) return false;
+    if (q && s.id.indexOf(q) < 0 && s.name.indexOf(q) < 0) return false;
+    if (f !== 'all' && stat(s) !== f) return false;
+    return true;
+  });
+  var dn = list.filter(function(s){return s.done;}).length, rg = list.filter(function(s){return s.registered;}).length;
+  document.getElementById('sum').textContent = list.length + '명 · 참여 ' + rg + '명 · 완주 ' + dn + '명';
+  var tb = document.getElementById('students'); tb.innerHTML='';
+  list.forEach(function(s){
+    var tr = el('tr');
+    tr.appendChild(el('td','num',s.id));
+    var nt = el('td',null,s.name); if (isTest(s)) nt.appendChild(el('span','pill t','테스트')); tr.appendChild(nt);
+    tr.appendChild(el('td','n',s.count+' / '+D.goal));
+    var st = el('td'); var k = stat(s);
+    st.appendChild(k==='done'?el('span','pill ok','완주'):k==='go'?el('span','pill go','진행 중'):el('span','pill no','미참여')); tr.appendChild(st);
+    tr.appendChild(el('td','num',hm(s.last)));
+    var td = el('td');
+    if (s.registered){
+      var b = el('button','btn small'+(pending===s.id?' confirm':''), pending===s.id?'정말 해제':'연결 해제');
+      b.title='휴대폰을 바꾼 학생의 기기 연결을 풀어 줍니다. 도장은 그대로 남아요.';
+      b.onclick=function(){
+        if(pending!==s.id){ pending=s.id; drawStudents(); return; }
+        b.disabled=true; b.textContent='처리 중…';
+        google.script.run.withSuccessHandler(function(r){ pending=null; if(!r.ok) alert(r.error); load(); }).adminResetDevice(DATA.key, s.id);
+      };
+      td.appendChild(b);
+    } else td.appendChild(el('span','muted','–'));
+    tr.appendChild(td);
+    tb.appendChild(tr);
+  });
+}
+document.getElementById('c').addEventListener('change', drawStudents);
+document.getElementById('q').addEventListener('input', drawStudents);
+document.getElementById('f').addEventListener('change', drawStudents);
+load(); setInterval(load, 30000);
+
+} };
+VIEWS.Cards = { css: "\n  body{background:var(--paper)}\n  .bar{position:sticky;top:0;background:var(--card);border-bottom:1px solid var(--line);padding:12px 16px;display:flex;gap:10px;align-items:center;flex-wrap:wrap;z-index:2}\n  .bar h1{font-size:20px;margin-right:auto}\n  select{font:inherit;padding:8px 10px;border:1px solid var(--line);border-radius:10px;background:var(--card);color:var(--ink)}\n  .pages{display:flex;flex-direction:column;align-items:center;gap:16px;padding:16px;overflow-x:auto}\n  /* A4 한 장 = 한 반 (여백 10mm 기준 190 x 277mm) */\n  .page{width:190mm;height:275mm;background:#fff;color:#1C2838;box-shadow:0 1px 6px rgba(0,0,0,.18);padding:0;display:flex;flex-direction:column;flex:none;overflow:hidden}\n  .ph{display:flex;justify-content:space-between;align-items:baseline;padding:0 1mm 2mm;border-bottom:.4mm solid #1C2838;margin-bottom:2.5mm}\n  .ph b{font-family:var(--display);font-size:18pt;font-weight:400}\n  .ph span{font-size:9pt;color:#5F6B7A}\n  .grid{flex:1;display:grid;gap:2mm;min-height:0;overflow:hidden}\n  .c{border:.3mm dashed #9AA6B5;border-radius:2mm;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;overflow:hidden;padding:1mm;min-height:0}\n  .c .ev{font-size:var(--ev);color:#C9372C;font-weight:700;line-height:1.2}\n  .c .nm{font-family:var(--display);font-size:var(--nm);line-height:1.15}\n  .c .id{font-size:var(--ev);color:#5F6B7A;line-height:1.2}\n  .c .q{margin:1mm 0}\n  .c .q img,.c .q canvas{width:var(--qr)!important;height:var(--qr)!important;display:block}\n  .c .hint{font-size:var(--hint);line-height:1.25;color:#3A4656;word-break:keep-all}\n  @media print{\n    @page{size:A4;margin:10mm}\n    body{background:#fff}\n    .bar{display:none}\n    .pages{padding:0;gap:0;display:block;overflow:visible}\n    .page{box-shadow:none;break-after:page;page-break-after:always}\n    .page:last-child{break-after:auto;page-break-after:auto}\n  }\n", html: "<div class=\"bar\">\n  <h1>학생 QR 카드<\/h1>\n  <label for=\"cls\" class=\"muted\">반 선택<\/label>\n  <select id=\"cls\"><\/select>\n  <span class=\"muted num\" id=\"cnt\"><\/span>\n  <button class=\"btn primary\" id=\"print\">인쇄<\/button>\n<\/div>\n<div id=\"err\" class=\"msg err\" hidden style=\"margin:16px\"><\/div>\n<div class=\"pages\" id=\"pages\"><\/div>", run: function(){
+
+var DATA = window.__DATA;
+var ALL = [];
+function cls(id){ return id.length > 2 ? id.slice(0, -2) : id; }
+function clsLabel(c){ return c.length === 3 ? c[0] + '학년 ' + Number(c.slice(1)) + '반' : c; }
+
+/* 반 인원에 맞춰 한 장에 들어가는 칸 수를 고릅니다. */
+function layout(n){
+  var opts = [[3,4],[4,5],[4,6],[5,6],[6,6],[6,7],[7,7],[7,8]];
+  for (var i = 0; i < opts.length; i++) if (opts[i][0] * opts[i][1] >= n) return opts[i];
+  var cols = Math.ceil(Math.sqrt(n * 190 / 262)); return [cols, Math.ceil(n / cols)];
+}
+
+function page(c, list){
+  var lc = layout(list.length), cols = lc[0], rows = lc[1];
+  var cw = (190 - (cols - 1) * 2) / cols, ch = (256 - (rows - 1) * 2) / rows;   // 카드 한 칸 크기(mm)
+  var small = ch < 55 || cols >= 5;
+  var qr = Math.max(14, Math.min(cw - 5, ch - (small ? 19 : 27)));
+  var p = document.createElement('section'); p.className = 'page';
+  p.style.setProperty('--qr', qr.toFixed(1) + 'mm');
+  p.style.setProperty('--nm', (small ? Math.min(11, cw * 0.3) : 14).toFixed(1) + 'pt');
+  p.style.setProperty('--ev', (small ? 6.2 : 8) + 'pt');
+  p.style.setProperty('--hint', (small ? 5.6 : 7) + 'pt');
+  var h = document.createElement('div'); h.className = 'ph';
+  var hb = document.createElement('b'); hb.textContent = clsLabel(c);
+  var hs = document.createElement('span'); hs.textContent = DATA.event + ' 스탬프 투어 · ' + list.length + '명 · 점선을 따라 잘라 나눠 주세요';
+  h.appendChild(hb); h.appendChild(hs); p.appendChild(h);
+  var g = document.createElement('div'); g.className = 'grid';
+  g.style.gridTemplateColumns = 'repeat(' + cols + ', minmax(0,1fr))';
+  g.style.gridTemplateRows = 'repeat(' + rows + ', minmax(0,1fr))';
+  list.forEach(function(s){
+    var d = document.createElement('div'); d.className = 'c';
+    d.innerHTML = '<div class="ev"></div><div class="nm"></div><div class="id num"></div><div class="q"></div><div class="hint"></div>';
+    d.querySelector('.ev').textContent = small ? '스탬프 투어' : DATA.event + ' 스탬프 투어';
+    d.querySelector('.nm').textContent = s.name;
+    d.querySelector('.id').textContent = s.id;
+    d.querySelector('.hint').textContent = small ? '기본 카메라로 한 번만 찍기' : '처음 한 번만 휴대폰 기본 카메라로 찍어 등록하세요. 다른 사람에게 보여 주지 마세요.';
+    new QRCode(d.querySelector('.q'), { text: s.url, width: 220, height: 220, correctLevel: QRCode.CorrectLevel.M });
+    g.appendChild(d);
+  });
+  p.appendChild(g);
+  return p;
+}
+
+function draw(){
+  var v = document.getElementById('cls').value;
+  var groups = {}, order = [];
+  ALL.forEach(function(s){ var c = cls(s.id); if (v !== 'all' && c !== v) return; if (!groups[c]) { groups[c] = []; order.push(c); } groups[c].push(s); });
+  var n = order.reduce(function(a, c){ return a + groups[c].length; }, 0);
+  document.getElementById('cnt').textContent = order.length + '개 반 · ' + n + '명 · A4 ' + order.length + '장';
+  var box = document.getElementById('pages'); box.innerHTML = '';
+  order.forEach(function(c){ box.appendChild(page(c, groups[c])); });
+}
+
+google.script.run.withSuccessHandler(function(r){
+  if(!r.ok){ var e=document.getElementById('err'); e.hidden=false; e.textContent=r.error; return; }
+  ALL = r.cards.slice().sort(function(a, b){ return a.id < b.id ? -1 : a.id > b.id ? 1 : 0; });
+  var sel = document.getElementById('cls');
+  var seen = {}, opts = ['<option value="all">전체 (반별로 1장씩)</option>'];
+  ALL.forEach(function(s){ var c = cls(s.id); if(!seen[c]){ seen[c]=1; opts.push('<option value="'+c.replace(/"/g,'')+'">'+clsLabel(c).replace(/</g,'&lt;')+'</option>'); } });
+  sel.innerHTML = opts.join('');
+  sel.addEventListener('change', draw);
+  draw();
+}).adminCards(DATA.key);
+document.getElementById('print').onclick = function(){ window.print(); };
+
+} };
+
+(function boot(){
+  var q = new URLSearchParams(location.search), name, data = {};
+  if (q.get('booth')) { name = 'Booth'; data.booth = q.get('booth'); data.key = q.get('k') || ''; }
+  else if (q.get('admin')) { name = 'Admin'; data.key = q.get('admin'); }
+  else if (q.get('cards')) { name = 'Cards'; data.key = q.get('cards'); }
+  else { name = 'Student'; data.code = q.get('s') || ''; data.b = q.get('b') || ''; data.t = q.get('t') || ''; }
+  function start(cfg){
+    data.event = cfg.event || '동아리 체험한마당'; data.goal = cfg.goal || 20; data.period = cfg.period || 20;
+    window.__DATA = data;
+    document.title = data.event + ' 스탬프';
+    var v = VIEWS[name];
+    document.getElementById('view-css').textContent = v.css;
+    document.getElementById('app').innerHTML = v.html;
+    v.run();
+  }
+  function fail(){
+    document.getElementById('app').innerHTML = '<div class="boot"><div><p>서버에 연결하지 못했어요.<br>와이파이·데이터를 확인해 주세요.</p><button class="btn primary" onclick="location.reload()">다시 시도</button></div></div>';
+  }
+  callApi('config', []).then(function(c){ if (c && c.ok) start(c); else fail(); }, fail);
+})();
+</script>
+</body>
+</html>
